@@ -1,0 +1,12 @@
+/*
+!/semantic_thesis_pipeline/
+!/opencompass/
+!/opencompass.yml
+!/qwen7_env.yml
+!/llm_env.yml
+!/.gitignore
+semantic_thesis_pipeline/results/
+semantic_thesis_pipeline/results_backup.tar.gz
+opencompass/outputs/
+opencompass/icl_inference_output/
+__pycache__/
