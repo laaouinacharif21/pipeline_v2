@@ -1,3 +1,8 @@
+from pathlib import Path as _P
+import sys as _sys
+_sys.path.insert(0, str(_P(__file__).resolve().parent))
+from src.utils.paths import get_results_root as _grr
+_RESULTS_ROOT = _grr()
 # benchmark_plots.py
 # -------------------
 # Benchmark visualisation pipeline — extended version.
@@ -352,7 +357,7 @@ if __name__ == "__main__":
     plot_family_progression_with_separation(
         llama_versions, llama_ceval, llama_cmmlu, llama_gsm8k,
         family_name  = "LLaMA",
-        results_root = "/home/tianyu/semantic_thesis_pipeline/results",
+        results_root = str(_RESULTS_ROOT),
     )
 
     # ── Qwen ──────────────────────────────────────────────────────────────────
@@ -374,7 +379,7 @@ if __name__ == "__main__":
     plot_family_progression_with_separation(
         qwen_versions, qwen_ceval, qwen_cmmlu, qwen_gsm8k,
         family_name      = "Qwen",
-        results_root     = "/home/tianyu/semantic_thesis_pipeline/results",
+        results_root     = str(_RESULTS_ROOT),
         peak_sep_override = qwen_peak_sep,
     )
 
@@ -397,7 +402,7 @@ if __name__ == "__main__":
     plot_family_progression_with_separation(
         bert_versions, bert_ceval, bert_cmmlu, bert_gsm8k,
         family_name       = "BERT",
-        results_root      = "/home/tianyu/semantic_thesis_pipeline/results",
+        results_root      = str(_RESULTS_ROOT),
         peak_sep_override = bert_peak_sep,
     )
 
