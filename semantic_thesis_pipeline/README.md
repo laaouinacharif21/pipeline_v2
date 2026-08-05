@@ -30,8 +30,13 @@ senses, across 13 pretrained models spanning three families.
 | 12 models | `llm_env` | 5.4.0 |
 | qwen-7b | `qwen7_env` | 4.32.0 |
 
-Qwen-7B ships custom remote code written against transformers 4.x and does
-not load on 5.x. All other models run under a single environment.
+Qwen-7B ships custom remote code written against transformers 4.x. Under
+5.x it loads, but `attn.c_proj` is randomly initialised rather than read
+from the checkpoint, and the forward pass fails on the removed
+`get_head_mask`. Both its geometry and its extraction therefore run in
+`qwen7_env`. All other models run under a single environment.
+
+See COMMANDS.md for the full command reference.
 
 ## Reproducing
 
@@ -40,7 +45,7 @@ not load on 5.x. All other models run under a single environment.
     # 1. Parameter geometry (once per model, independent of the dataset)
     python -m src.analysis.compute_geometry --all-models --skip qwen-7b
     conda activate qwen7_env
-    python -m src.analysis.compute_geometry --model qwen-7b
+    python -m src.analysis.compute_geometry --model qwen-7b   # must be qwen7_env
     conda activate llm_env
 
     # 2. Extraction, metrics, layer selection, plots (per word)

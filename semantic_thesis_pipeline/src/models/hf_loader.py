@@ -1,3 +1,20 @@
+# Qwen-7B's remote code declares transformers_stream_generator as a dependency.
+# That package imports DisjunctiveConstraint, removed in transformers 5.x, so
+# the import fails before the model is ever built. It is only used for
+# streaming generation, which this pipeline does not perform, so a stub lets
+# the weights load under the main environment.
+#
+# Loading succeeds, but Qwen-7B's forward pass still calls
+# ModuleUtilsMixin.get_head_mask, also removed in transformers 5.x. Hidden
+# state extraction for this model therefore requires qwen7_env
+# (transformers 4.32.0). Parameter geometry needs only the weights and runs
+# here alongside every other model.
+import sys as _sys
+import types as _types
+for _m in ("transformers_stream_generator", "transformers_stream_generator.main"):
+    if _m not in _sys.modules:
+        _sys.modules[_m] = _types.ModuleType(_m)
+
 import os
 import torch
 
