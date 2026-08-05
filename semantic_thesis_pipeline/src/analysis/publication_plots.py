@@ -30,8 +30,10 @@ from scipy.stats import pearsonr
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from src.utils.paths import get_results_root, infer_family
 
+from src.analysis._io import analysis_dir as _adir
 RESULTS_ROOT = get_results_root()
-PLOT_DIR = RESULTS_ROOT / "plots" / "publication"
+ANALYSIS_DIR = _adir("bank")
+PLOT_DIR = _adir("bank", "plots/publication")
 PLOT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Style ──────────────────────────────────────────────────────────────────
@@ -77,15 +79,16 @@ TRUTHFULQA = {
 
 # ── Data loaders ───────────────────────────────────────────────────────────
 
+WORD = "bank"          # overridden by main()
+
+
 def load_erank(model_name):
-    family = infer_family(model_name)
-    p = RESULTS_ROOT / family / model_name / "parameters" / "effective_rank.csv"
-    return pd.read_csv(p) if p.exists() else None
+    from src.analysis._io import load_erank as _le
+    return _le(model_name)
 
 def load_separation(model_name):
-    family = infer_family(model_name)
-    p = RESULTS_ROOT / family / model_name / "metrics" / "semantic_separation.csv"
-    return pd.read_csv(p) if p.exists() else None
+    from src.analysis._io import load_sep as _ls
+    return _ls(model_name, WORD)
 
 def load_partial_corr(model_name):
     family = infer_family(model_name)
@@ -101,7 +104,7 @@ def fig1_partial_corr_heatmap():
     """Heatmap of partial correlations (controlling depth) for all models."""
     # Build matrix from erank-separation correlations as proxy
     # (Use direct Pearson r from effective rank analysis summary)
-    summary_path = RESULTS_ROOT / "effective_rank" / "effective_rank_summary.csv"
+    summary_path = ANALYSIS_DIR / "effective_rank_summary.csv"
     if not summary_path.exists():
         print("  [SKIP] Fig 1 -- effective_rank_summary.csv not found")
         return
@@ -275,7 +278,7 @@ def fig3_erank_layers():
 
 def fig4_crossfamily_bars():
     """Grouped bar chart of up_proj correlations across all decoder models."""
-    summary_path = RESULTS_ROOT / "effective_rank" / "effective_rank_summary.csv"
+    summary_path = ANALYSIS_DIR / "effective_rank_summary.csv"
     if not summary_path.exists():
         print("  [SKIP] Fig 4 -- summary not found")
         return
@@ -395,7 +398,14 @@ def fig5_truthfulqa_erank():
 # ── Main ───────────────────────────────────────────────────────────────────
 
 def main():
-    print(f"\nGenerating publication figures -> {PLOT_DIR}\n")
+    global WORD, ANALYSIS_DIR, PLOT_DIR
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--word", default="bank")
+    WORD = ap.parse_args().word
+    ANALYSIS_DIR = _adir(WORD)
+    PLOT_DIR = _adir(WORD, "plots/publication")
+    print(f"\nword: {WORD}\nGenerating publication figures -> {PLOT_DIR}\n")
     print("Fig 1: Correlation heatmap ...")
     fig1_partial_corr_heatmap()
     print("Fig 2: Erank vs separation scatter ...")

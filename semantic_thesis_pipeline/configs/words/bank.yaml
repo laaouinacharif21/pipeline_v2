@@ -1,0 +1,11 @@
+word: bank
+dataset: data/raw/semantic_sentences/sentences_prefixed.json
+senses:
+  - finance
+  - river
+n_per_sense: 100
+prefix: "Consider the following sentence: "
+notes: >
+  Original controlled word-sense set. The neutral prefix keeps the target
+  token out of the first two positions, where decoder attention-sink
+  activations dominate the hidden state.

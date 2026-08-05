@@ -4,9 +4,9 @@ from src.utils.paths import ensure_model_result_dirs
 from src.metrics.layer_ranking import rank_layers
 
 
-def run_layer_selection(model_name: str):
+def run_layer_selection(model_name: str, word: str = "bank"):
 
-    paths = ensure_model_result_dirs(model_name)
+    paths = ensure_model_result_dirs(model_name, word)
 
     cosine = paths["metrics"] / "cosine_layerwise.csv"
     l2 = paths["metrics"] / "l2_layerwise.csv"

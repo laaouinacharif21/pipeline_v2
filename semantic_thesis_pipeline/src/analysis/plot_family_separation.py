@@ -1,38 +1,28 @@
+# -*- coding: utf-8 -*-
 """
 Layer-wise semantic separation curves by model family.
 
 Produces one figure per family plus a combined three-panel comparison.
-Layer depth is shown both as absolute index (per family) and as relative
-depth (combined panel), since families differ in layer count.
+Per-family panels use absolute layer index; the combined panel uses
+relative depth, since families differ in layer count.
 
 Usage:
-    python -m src.analysis.plot_family_separation
+    python -m src.analysis.plot_family_separation --word bank
 """
 
+import argparse
 import sys
 from pathlib import Path
 
-import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from src.utils.paths import get_results_root, infer_family
-
-RESULTS_ROOT = get_results_root()
-OUT_DIR = RESULTS_ROOT / "plots" / "separation"
-OUT_DIR.mkdir(parents=True, exist_ok=True)
-
-FAMILIES = {
-    "llama": ["llama-7b", "llama-2-7b", "llama-3-8b", "llama-3.1-8b"],
-    "qwen": ["qwen-7b", "qwen1.5-7b", "qwen2-7b", "qwen2.5-7b", "qwen3-8b"],
-    "bert": ["bert-base", "roberta-base", "spanbert-base-cased", "xlm-roberta-base"],
-}
+from src.analysis._io import FAMILIES, load_sep, analysis_dir
 
 TITLES = {"llama": "LLaMA family", "qwen": "Qwen family",
           "bert": "BERT-family encoders"}
-
 COLORS = ["#1f77b4", "#d62728", "#2ca02c", "#9467bd", "#ff7f0e"]
 
 plt.rcParams.update({
@@ -41,47 +31,39 @@ plt.rcParams.update({
 })
 
 
-def load(model):
-    fam = infer_family(model)
-    p = RESULTS_ROOT / fam / model / "metrics" / "semantic_separation.csv"
-    if not p.exists():
-        print(f"  [SKIP] {model}")
-        return None
-    return pd.read_csv(p).sort_values("layer").reset_index(drop=True)
-
-
-def plot_family(fam, models):
+def plot_family(fam, models, word, out_dir):
     fig, ax = plt.subplots(figsize=(10, 6))
-    plotted = 0
+    n = 0
     for i, m in enumerate(models):
-        df = load(m)
+        df = load_sep(m, word)
         if df is None:
+            print(f"  [SKIP] {m}")
             continue
         ax.plot(df["layer"], df["separation"], marker="o", markersize=5,
                 linewidth=2.2, label=m, color=COLORS[i % len(COLORS)])
-        plotted += 1
-    if plotted == 0:
+        n += 1
+    if n == 0:
         plt.close()
         return
     ax.set_xlabel("Layer")
     ax.set_ylabel("Semantic separation  Sep(l)")
-    ax.set_title(TITLES[fam])
+    ax.set_title(f"{TITLES[fam]}  --  \"{word}\"")
     ax.axhline(0, color="grey", linewidth=1, linestyle="--", alpha=0.6)
     ax.grid(axis="y", linestyle="--", alpha=0.35)
     ax.set_axisbelow(True)
     ax.legend()
     plt.tight_layout()
-    out = OUT_DIR / f"{fam}_family_separation.png"
+    out = out_dir / f"{fam}_family_separation.png"
     fig.savefig(out, dpi=300, bbox_inches="tight")
     plt.close()
     print(f"  Saved -> {out}")
 
 
-def plot_combined():
+def plot_combined(word, out_dir):
     fig, axes = plt.subplots(1, 3, figsize=(21, 6), sharey=True)
     for ax, (fam, models) in zip(axes, FAMILIES.items()):
         for i, m in enumerate(models):
-            df = load(m)
+            df = load_sep(m, word)
             if df is None:
                 continue
             rel = df["layer"] / df["layer"].max()
@@ -92,33 +74,52 @@ def plot_combined():
         ax.axhline(0, color="grey", linewidth=1, linestyle="--", alpha=0.6)
         ax.grid(axis="y", linestyle="--", alpha=0.35)
         ax.set_axisbelow(True)
-        ax.legend(fontsize=12)
+        if ax.get_legend_handles_labels()[0]:
+            ax.legend(fontsize=12)
     axes[0].set_ylabel("Semantic separation  Sep(l)")
     plt.tight_layout()
-    out = OUT_DIR / "all_families_separation.png"
+    out = out_dir / "all_families_separation.png"
     fig.savefig(out, dpi=300, bbox_inches="tight")
     plt.close()
     print(f"  Saved -> {out}")
 
 
-def peaks():
+def peak_table(word, out_dir):
+    import pandas as pd
+    rows = []
     print(f"\n{'Model':<22}{'peak Sep':>10}{'at layer':>10}{'rel depth':>11}{'final':>9}")
     print("-" * 62)
     for fam, models in FAMILIES.items():
         for m in models:
-            df = load(m)
+            df = load_sep(m, word)
             if df is None:
                 continue
             i = df["separation"].idxmax()
-            print(f"{m:<22}{df['separation'][i]:>10.4f}"
-                  f"{int(df['layer'][i]):>10}"
-                  f"{df['layer'][i]/df['layer'].max():>11.2f}"
-                  f"{df['separation'].iloc[-1]:>9.4f}")
+            rel = df["layer"][i] / df["layer"].max()
+            rows.append({"family": fam, "model": m, "peak_sep": df["separation"][i],
+                         "peak_layer": int(df["layer"][i]), "peak_rel_depth": rel,
+                         "final_sep": df["separation"].iloc[-1],
+                         "n_layers": len(df)})
+            print(f"{m:<22}{df['separation'][i]:>10.4f}{int(df['layer'][i]):>10}"
+                  f"{rel:>11.2f}{df['separation'].iloc[-1]:>9.4f}")
+    path = out_dir.parent.parent / "separation_peaks.csv"
+    pd.DataFrame(rows).to_csv(path, index=False)
+    print(f"\nSaved -> {path}")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--word", default="bank")
+    a = ap.parse_args()
+
+    out_dir = analysis_dir(a.word, "plots/separation")
+    print(f"word: {a.word}\noutput: {out_dir}\n")
+
+    for fam, models in FAMILIES.items():
+        plot_family(fam, models, a.word, out_dir)
+    plot_combined(a.word, out_dir)
+    peak_table(a.word, out_dir)
 
 
 if __name__ == "__main__":
-    print(f"results root: {RESULTS_ROOT}\n")
-    for fam, models in FAMILIES.items():
-        plot_family(fam, models)
-    plot_combined()
-    peaks()
+    main()

@@ -2,15 +2,33 @@
 Target-token hidden-state extraction.
 
 For each sentence, locates the FIRST SUBWORD TOKEN of the target word and
-returns that token's hidden state at every layer. Tokenizer-agnostic: it
-locates the token by decoding cumulative prefixes rather than relying on
-offset mappings, which slow tokenizers do not provide.
+returns that token's hidden state at every layer.
+
+Tokenizer-agnostic: the token is located by decoding cumulative prefixes
+rather than relying on offset mappings, which slow tokenizers do not provide.
+
+Two validation gates guard against silent corruption:
+
+  1. Position gate. Decoder models place very large activations on the first
+     one or two token positions (the attention-sink effect). A target token
+     in that region yields a hidden state dominated by position rather than
+     meaning, so indices below MIN_TOKEN_INDEX are rejected.
+
+  2. Norm gate. Any extracted vector whose norm exceeds NORM_RATIO_LIMIT
+     times the median norm is treated as anomalous.
 """
 
 import re
 
 import numpy as np
 import torch
+
+MIN_TOKEN_INDEX = 3
+NORM_RATIO_LIMIT = 10.0
+
+
+class ExtractionValidationError(RuntimeError):
+    """Raised when extracted representations fail a validation gate."""
 
 
 def _nows_len(s: str) -> int:
@@ -51,7 +69,6 @@ def find_target_token_index(tokenizer, sentence, target_word, max_length=128):
     validated = bool(piece_clean) and (
         tw.startswith(piece_clean) or piece_clean.startswith(tw)
     )
-
     return idx, validated
 
 
@@ -62,6 +79,9 @@ def extract_target_token_hidden_states(
     target_word,
     max_length=128,
     batch_size=8,
+    strict=True,
+    min_token_index=MIN_TOKEN_INDEX,
+    norm_ratio_limit=NORM_RATIO_LIMIT,
 ):
     """
     Returns
@@ -75,8 +95,7 @@ def extract_target_token_hidden_states(
     except Exception:
         pass
 
-    indices = []
-    validated = []
+    indices, validated = [], []
     for s in sentences:
         i, v = find_target_token_index(tokenizer, s, target_word, max_length)
         indices.append(i)
@@ -84,20 +103,27 @@ def extract_target_token_hidden_states(
 
     keep_mask = [i is not None for i in indices]
 
+    # -- gate 1: position ------------------------------------------------------
+    low = [(i, idx) for i, idx in enumerate(indices)
+           if idx is not None and idx < min_token_index]
+    if low and strict:
+        examples = "\n".join(f"    idx={idx} | {sentences[i][:70]}" for i, idx in low[:5])
+        raise ExtractionValidationError(
+            f"{len(low)}/{len(sentences)} sentences place the target token at "
+            f"position < {min_token_index}, where attention-sink activations "
+            f"dominate the hidden state. Add a neutral prefix or rewrite these "
+            f"sentences.\n{examples}"
+        )
+
     device = next(model.parameters()).device
     collected = []
 
     for b in range(0, len(sentences), batch_size):
-        chunk = sentences[b : b + batch_size]
-        chunk_idx = indices[b : b + batch_size]
+        chunk = sentences[b: b + batch_size]
+        chunk_idx = indices[b: b + batch_size]
 
-        enc = tokenizer(
-            chunk,
-            padding=True,
-            truncation=True,
-            max_length=max_length,
-            return_tensors="pt",
-        )
+        enc = tokenizer(chunk, padding=True, truncation=True,
+                        max_length=max_length, return_tensors="pt")
         enc = {k: v.to(device) for k, v in enc.items()}
 
         with torch.no_grad():
@@ -109,20 +135,35 @@ def extract_target_token_hidden_states(
         for j, ti in enumerate(chunk_idx):
             if ti is None:
                 continue
-            ti_use = min(ti, seq_len - 1)
-            collected.append(hs[j, :, ti_use, :].float().cpu().numpy())
+            collected.append(hs[j, :, min(ti, seq_len - 1), :].float().cpu().numpy())
 
         del out, hs
         torch.cuda.empty_cache()
 
     embeddings = np.stack(collected, axis=0)
 
+    # -- gate 2: norms ---------------------------------------------------------
+    mid = embeddings.shape[1] // 2
+    norms = np.linalg.norm(embeddings[:, mid, :], axis=1)
+    med = float(np.median(norms))
+    ratio = float(norms.max() / med) if med > 0 else float("inf")
+    if ratio > norm_ratio_limit and strict:
+        raise ExtractionValidationError(
+            f"Anomalous representation norms at layer {mid}: max/median = "
+            f"{ratio:.1f} (limit {norm_ratio_limit}). This usually indicates "
+            f"target tokens in attention-sink positions or a tokenisation "
+            f"mismatch."
+        )
+
     report = {
         "n_sentences": len(sentences),
         "n_located": int(sum(keep_mask)),
         "n_validated": int(sum(validated)),
         "validation_rate": float(sum(validated)) / max(1, len(sentences)),
-        "example_indices": indices[:10],
+        "min_token_index": int(min(i for i in indices if i is not None)),
+        "max_token_index": int(max(i for i in indices if i is not None)),
+        "n_below_position_gate": len(low),
+        "norm_max_over_median": round(ratio, 2),
+        "strict": strict,
     }
-
     return embeddings, keep_mask, report

@@ -55,7 +55,6 @@ from scipy.stats import pearsonr
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from src.utils.paths import get_results_root, infer_family
 from src.models.hf_loader import load_model_and_tokenizer
-from src.models.model_registry import get_model_path
 
 plt.rcParams.update({
     "font.family":     "DejaVu Sans",

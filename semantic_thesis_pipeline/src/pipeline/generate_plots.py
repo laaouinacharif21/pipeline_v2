@@ -9,9 +9,9 @@ from src.metrics.cosine_metrics import compute_cosine_metrics
 from src.metrics.l2_metrics import compute_l2_metrics
 
 
-def run_plots(model_name: str):
-    paths = ensure_model_result_dirs(model_name)
-    files = get_standard_result_files(model_name)
+def run_plots(model_name: str, word: str = "bank"):
+    paths = ensure_model_result_dirs(model_name, word)
+    files = get_standard_result_files(model_name, word)
 
     data = np.load(files["embedding_tensor"])
     embeddings = data["embeddings"]

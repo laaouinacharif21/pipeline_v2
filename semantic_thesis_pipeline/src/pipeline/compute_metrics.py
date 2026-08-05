@@ -8,11 +8,11 @@ from src.metrics.semantic_separation import compute_semantic_separation
 from src.utils.paths import ensure_model_result_dirs, get_standard_result_files
 
 
-def run_metrics(model_name: str):
-    print("?? RUN_METRICS EXECUTED ??")
+def run_metrics(model_name: str, word: str = "bank"):
+    print(f"[metrics] {model_name} / {word}")
 
-    paths = ensure_model_result_dirs(model_name)
-    files = get_standard_result_files(model_name)
+    paths = ensure_model_result_dirs(model_name, word)
+    files = get_standard_result_files(model_name, word)
 
     # Load embeddings
     data = np.load(files["embedding_tensor"])
