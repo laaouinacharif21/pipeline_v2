@@ -57,7 +57,15 @@ def infer_family(model_name: str) -> str:
 
 
 def get_results_root() -> Path:
-    """Return the global results root directory."""
+    """Return the global results root directory.
+
+    Overridable via the SEMANTIC_RESULTS_ROOT environment variable so that
+    alternative extraction settings can be written to a parallel tree.
+    """
+    import os
+    override = os.environ.get("SEMANTIC_RESULTS_ROOT")
+    if override:
+        return Path(override)
     return get_project_root() / "results"
 
 

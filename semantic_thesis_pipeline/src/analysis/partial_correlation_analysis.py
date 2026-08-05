@@ -17,9 +17,13 @@ plt.rcParams.update({
     "figure.dpi": 150,
 })
 
-RESULTS_ROOT = Path("/home/tianyu/semantic_thesis_pipeline/results")
-OUT_DIR      = Path("/home/tianyu/semantic_thesis_pipeline/results/partial_correlations")
-PLOT_DIR     = Path("/home/tianyu/semantic_thesis_pipeline/results/plots/partial_correlation")
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from src.utils.paths import get_results_root
+
+RESULTS_ROOT = get_results_root()
+OUT_DIR      = RESULTS_ROOT / "partial_correlations"
+PLOT_DIR     = RESULTS_ROOT / "plots" / "partial_correlation"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 PLOT_DIR.mkdir(parents=True, exist_ok=True)
 
