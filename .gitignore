@@ -10,3 +10,9 @@ semantic_thesis_pipeline/results_backup.tar.gz
 opencompass/outputs/
 opencompass/icl_inference_output/
 __pycache__/
+semantic_thesis_pipeline/results/
+semantic_thesis_pipeline/results_*/
+semantic_thesis_pipeline/logs_*/
+semantic_thesis_pipeline/src_backup_*/
+semantic_thesis_pipeline/*.bak
+semantic_thesis_pipeline/*.tar.gz
