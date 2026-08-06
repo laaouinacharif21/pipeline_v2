@@ -397,6 +397,33 @@ def fig5_truthfulqa_erank():
 
 # ── Main ───────────────────────────────────────────────────────────────────
 
+def _build_erank_summary(word):
+    """Regenerate effective_rank_summary.csv for this word.
+
+    Figures 1 and 4 read it; building it here keeps the figures in step with
+    the current results rather than a manually refreshed file.
+    """
+    from scipy.stats import pearsonr
+    from src.analysis._io import ALL_MODELS, merge_geometry_sep
+    from src.utils.paths import infer_family
+    rows = []
+    for m in ALL_MODELS:
+        mg = merge_geometry_sep(m, word)
+        if mg is None:
+            continue
+        for proj in ["q_proj", "k_proj", "v_proj", "up_proj"]:
+            c = f"{proj}_erank"
+            if c not in mg.columns:
+                continue
+            r, p = pearsonr(mg[c], mg["separation"])
+            rows.append({"family": infer_family(m), "model": m, "proj": proj,
+                         "erank_sep_r": r, "erank_sep_p": p,
+                         "mean_erank": mg[c].mean(), "max_erank": mg[c].max()})
+    if rows:
+        pd.DataFrame(rows).to_csv(ANALYSIS_DIR / "effective_rank_summary.csv",
+                                  index=False)
+
+
 def main():
     global WORD, ANALYSIS_DIR, PLOT_DIR
     import argparse
@@ -406,6 +433,7 @@ def main():
     ANALYSIS_DIR = _adir(WORD)
     PLOT_DIR = _adir(WORD, "plots/publication")
     print(f"\nword: {WORD}\nGenerating publication figures -> {PLOT_DIR}\n")
+    _build_erank_summary(WORD)
     print("Fig 1: Correlation heatmap ...")
     fig1_partial_corr_heatmap()
     print("Fig 2: Erank vs separation scatter ...")

@@ -24,7 +24,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.analysis._io import ALL_MODELS, FAMILIES, load_sep, load_erank, load_params
 from src.utils.paths import get_model_paths, get_standard_result_files
 
-WORD = "bank"
+import argparse
+_ap = argparse.ArgumentParser()
+_ap.add_argument("--word", default="bank")
+WORD = _ap.parse_known_args()[0].word
 MIN_TOKEN_INDEX = 3
 PASS, FAIL = [], []
 
