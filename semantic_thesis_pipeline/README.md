@@ -45,7 +45,7 @@ See COMMANDS.md for the full command reference.
     # 1. Parameter geometry (once per model, independent of the dataset)
     python -m src.analysis.compute_geometry --all-models --skip qwen-7b
     conda activate qwen7_env
-    python -m src.analysis.compute_geometry --model qwen-7b   # must be qwen7_env
+    python -m src.analysis.compute_geometry --model qwen-7b   # must be qwen7_env   # must be qwen7_env
     conda activate llm_env
 
     # 2. Extraction, metrics, layer selection, plots (per word)
