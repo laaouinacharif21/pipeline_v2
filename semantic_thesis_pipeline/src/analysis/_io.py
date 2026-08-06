@@ -16,8 +16,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.utils.paths import (
-    get_results_root, get_parameters_dir, get_model_result_dir,
-    get_analysis_dir, infer_family, ensure_dir,
+    get_parameters_dir, get_model_result_dir, get_analysis_dir, ensure_dir,
 )
 
 FAMILIES = {

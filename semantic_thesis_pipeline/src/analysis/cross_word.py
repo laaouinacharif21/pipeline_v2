@@ -27,7 +27,7 @@ from scipy import stats
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from src.analysis._io import (
-    FAMILIES, ALL_MODELS, DECODERS, merge_geometry_sep, star,
+    FAMILIES, DECODERS, merge_geometry_sep, star,
 )
 from src.utils.paths import get_results_root, available_words, ensure_dir
 

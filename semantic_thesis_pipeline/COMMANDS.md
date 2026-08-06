@@ -170,3 +170,19 @@ SVDs and makes results vary at the 1e-6 level depending on placement.
 
     python -m src.analysis.compute_geometry --all-models --device cuda:0
     python -m src.analysis.compute_geometry --model llama-7b --device auto
+
+## 10. Cross-word generalisation
+
+Reports the depth-controlled partial correlation for every (model, word)
+pair, so an association found for one target word can be checked against the
+others. Words are discovered from the results tree unless listed explicitly.
+
+    python -m src.analysis.cross_word --measure spectral_norm --projection q_proj
+    python -m src.analysis.cross_word --measure erank --projection up_proj
+    python -m src.analysis.cross_word --measure stable_rank --projection k_proj --words bank,crane
+
+Output includes a per-word summary (how many decoders and encoders reach
+significance, mean r, sign) and a per-model count of how many words each
+model holds in, flagged when a model's sign varies between words.
+
+Writes `results/analysis/_cross_word/cross_word_{projection}_{measure}.csv`.
