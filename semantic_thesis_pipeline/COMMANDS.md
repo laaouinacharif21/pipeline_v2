@@ -150,3 +150,23 @@ Geometry does not need recomputing.
     llama-7b  llama-2-7b  llama-3-8b  llama-3.1-8b
     qwen-7b  qwen1.5-7b  qwen2-7b  qwen2.5-7b  qwen3-8b
     bert-base  roberta-base  spanbert-base-cased  xlm-roberta-base
+
+## 9. Additions, 6 August 2026
+
+**Geometric measures.** `compute_geometry` now emits four per projection:
+spectral norm, Frobenius norm, effective rank, and stable rank
+(‖A‖²_F / ‖A‖²_2). All derive from a single exact SVD.
+
+**Projection sets.** Primary: `q_proj, k_proj, v_proj, up_proj`.
+Supplementary: `o_proj, gate_proj, down_proj`. Declared before analysis;
+supplementary results carry no primary claims.
+
+    python -m src.analysis.partial_correlation --word bank --measure stable_rank
+    python -m src.analysis.partial_correlation --word bank --measure erank --projections supplementary
+
+**Device selection.** Geometry defaults to a single GPU. `device_map="auto"`
+shards a model across every card, which adds cross-device transfers between
+SVDs and makes results vary at the 1e-6 level depending on placement.
+
+    python -m src.analysis.compute_geometry --all-models --device cuda:0
+    python -m src.analysis.compute_geometry --model llama-7b --device auto
