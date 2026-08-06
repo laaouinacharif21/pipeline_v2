@@ -103,6 +103,23 @@ def extract_target_token_hidden_states(
 
     keep_mask = [i is not None for i in indices]
 
+    # -- gate 0: location ------------------------------------------------------
+    missing = [i for i, idx in enumerate(indices) if idx is None]
+    if len(missing) == len(sentences):
+        raise ExtractionValidationError(
+            f"The target word '{target_word}' was not found in any of the "
+            f"{len(sentences)} sentences. Check that the dataset's "
+            f"target_word matches its sentences."
+        )
+    if missing and strict:
+        examples = "\n".join(f"    [{i}] {sentences[i][:70]}" for i in missing[:5])
+        raise ExtractionValidationError(
+            f"The target word '{target_word}' was not found in "
+            f"{len(missing)}/{len(sentences)} sentences. Dropping them would "
+            f"unbalance the classes, so extraction stops. Fix the sentences "
+            f"(check spelling and inflected forms).\n{examples}"
+        )
+
     # -- gate 1: position ------------------------------------------------------
     low = [(i, idx) for i, idx in enumerate(indices)
            if idx is not None and idx < min_token_index]

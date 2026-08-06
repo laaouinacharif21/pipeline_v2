@@ -31,6 +31,24 @@ def run_extraction_target(model_name: str, word: str = "bank",
     sentences, labels = data["sentences"], data["labels"]
     target_word = data["target_word"]
 
+    expected = cfg.get("senses")
+    seen = sorted(set(labels))
+    if expected and sorted(expected) != seen:
+        raise ValueError(
+            f"Labels in the dataset {seen} do not match the senses declared "
+            f"in {cfg.get('_config_path')}: {sorted(expected)}"
+        )
+    if len(seen) != 2:
+        raise ValueError(
+            f"Sep(l) is defined for exactly two senses; found {len(seen)}: {seen}"
+        )
+    counts = {s: labels.count(s) for s in seen}
+    if min(counts.values()) != max(counts.values()):
+        raise ValueError(
+            f"Sense classes are unbalanced: {counts}. Sep(l) compares intra- "
+            f"and inter-class means, so classes must be equal in size."
+        )
+
     result = load_model_and_tokenizer(model_name)
     tokenizer, model = result[0], result[1]
 
