@@ -166,7 +166,7 @@ def _versions() -> dict:
     return v
 
 
-def compute_model(model_name: str, cache: bool = False):
+def compute_model(model_name: str, cache: bool = False, device=None):
     out_dir = ensure_dir(get_parameters_dir(model_name))
     erank_csv = out_dir / "effective_rank.csv"
     stats_csv = out_dir / "parameter_stats.csv"
@@ -176,7 +176,11 @@ def compute_model(model_name: str, cache: bool = False):
         return pd.read_csv(erank_csv)
 
     print(f"\nLoading {model_name}")
-    model = load_model_and_tokenizer(model_name)[1]
+    # A single device avoids device_map='auto' sharding the model across
+    # every GPU. Geometry needs no forward pass, so sharding only adds
+    # cross-device transfers between SVDs, and results vary at the
+    # 1e-6 level depending on which card each layer lands on.
+    model = load_model_and_tokenizer(model_name, device=device)[1]
     model.eval()
 
     layers, pattern = get_layers(model)
@@ -240,6 +244,8 @@ def main():
     ap.add_argument("--cache", action="store_true",
                     help="Skip models whose output already exists")
     ap.add_argument("--continue-on-error", action="store_true")
+    ap.add_argument("--device", default="cuda:0",
+                    help="Single device for weight loading; pass 'auto' to shard")
     a = ap.parse_args()
 
     skip = {s.strip() for s in a.skip.split(",") if s.strip()}
@@ -249,7 +255,8 @@ def main():
     for i, m in enumerate(models, 1):
         print(f"\n{'=' * 70}\n[{i}/{len(models)}] {m}\n{'=' * 70}")
         try:
-            compute_model(m, cache=a.cache)
+            compute_model(m, cache=a.cache,
+                          device=None if a.device == 'auto' else a.device)
         except Exception as e:
             failed.append((m, f"{type(e).__name__}: {e}"))
             print(f"  !! FAILED {m}: {type(e).__name__}: {e}")
