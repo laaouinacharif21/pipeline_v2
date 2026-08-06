@@ -1,3 +1,16 @@
+"""
+DEPRECATED -- mean-pooled sentence representations.
+
+This function averages hidden states over all tokens in the sentence. It does
+not implement the target-token extraction described in the methodology, and
+was the source of a measurement error corrected in August 2026: pooled
+representations are dominated by outlier feature dimensions, leaving Sep(l)
+near zero through the middle layers.
+
+Retained only to reproduce the mean-pooled vs target-token comparison. Use
+src/extraction/target_token_extractor.py for all new work.
+"""
+
 import torch
 
 

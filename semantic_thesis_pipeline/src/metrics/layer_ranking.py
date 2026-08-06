@@ -1,3 +1,15 @@
+"""
+Layer ranking by representational stability.
+
+Layers are scored as (normalised mean cosine + normalised mean L2 distance
+- normalised drift to the next layer), ranking them by how stable and
+well-spread their representations are.
+
+NOTE: this score is unrelated to semantic separation Sep(l). The layers it
+selects are not the layers where sense separation peaks, and it should not
+be cited as such.
+"""
+
 import numpy as np
 import pandas as pd
 

@@ -6,9 +6,14 @@ from src.extraction.hidden_state_extractor import extract_hidden_states
 from src.utils.paths import ensure_model_result_dirs, get_standard_result_files
 
 
-def run_extraction(model_name: str, dataset_path: str):
-    paths = ensure_model_result_dirs(model_name)
-    files = get_standard_result_files(model_name)
+def run_extraction(model_name: str, dataset_path: str, word: str = "_meanpooled"):
+    """DEPRECATED. Mean-pooled extraction; see hidden_state_extractor.
+
+    Writes under the word key "_meanpooled" so it cannot overwrite
+    target-token results.
+    """
+    paths = ensure_model_result_dirs(model_name, word)
+    files = get_standard_result_files(model_name, word)
 
     with open(dataset_path, "r", encoding="utf-8") as f:
         data = json.load(f)
