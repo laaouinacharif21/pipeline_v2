@@ -120,7 +120,12 @@ def test_erank_bounds():
 
 
 if __name__ == "__main__":
+    from src.utils.paths import get_results_root
     print(f"Pipeline integrity checks  (word='{WORD}')")
+    print(f"results root: {get_results_root()}")
+    if not (get_results_root() / "words" / WORD).exists():
+        print(f"\nERROR: no results for word '{WORD}' under this root.")
+        sys.exit(1)
     test_sep_zero_at_embedding_layer()
     test_target_token_position()
     test_label_alignment()
