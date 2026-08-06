@@ -25,12 +25,21 @@ from scipy import stats
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from src.analysis._io import (
-    FAMILIES, PROJECTIONS, merge_geometry_sep, analysis_dir, star,
+    FAMILIES, PRIMARY_PROJECTIONS, SUPPLEMENTARY_PROJECTIONS,
+    ALL_PROJECTIONS, merge_geometry_sep, analysis_dir, star,
 )
 
 COLUMN = {
     "spectral_norm": "{proj}_spectral_norm",
+    "fro_norm": "{proj}_fro_norm",
     "erank": "{proj}_erank",
+    "stable_rank": "{proj}_stable_rank",
+}
+
+PROJECTION_SETS = {
+    "primary": PRIMARY_PROJECTIONS,
+    "supplementary": SUPPLEMENTARY_PROJECTIONS,
+    "all": ALL_PROJECTIONS,
 }
 
 
@@ -39,7 +48,7 @@ def residualise(a, b):
     return a - np.polyval(np.polyfit(b, a, 1), b)
 
 
-def analyse(model, word, measure):
+def analyse(model, word, measure, projections):
     which = "erank" if measure == "erank" else "params"
     m = merge_geometry_sep(model, word, which=which)
     if m is None:
@@ -49,7 +58,7 @@ def analyse(model, word, measure):
     sep = m["separation"].values
     rows = []
 
-    for proj in PROJECTIONS:
+    for proj in projections:
         col = COLUMN[measure].format(proj=proj)
         if col not in m.columns or m[col].isna().all() or m[col].std() == 0:
             continue
@@ -68,10 +77,11 @@ def analyse(model, word, measure):
     return rows
 
 
-def run(word, measure):
+def run(word, measure, projset='primary'):
+    projections = PROJECTION_SETS[projset]
     print(f"\n{'='*78}")
     print(f"PARTIAL CORRELATION  --  {measure} vs Sep(l), controlling for layer depth")
-    print(f"word: {word}")
+    print(f"word: {word}   projections: {projset}")
     print(f"{'='*78}")
 
     out = []
@@ -80,7 +90,7 @@ def run(word, measure):
         print(f"  {'model':<22}{'proj':<10}{'raw r':>9}{'partial r':>12}{'p':>10}  sig")
         print("  " + "-" * 66)
         for model in models:
-            rows = analyse(model, word, measure)
+            rows = analyse(model, word, measure, projections)
             if not rows:
                 print(f"  {model:<22}[no data]")
                 continue
@@ -93,13 +103,13 @@ def run(word, measure):
 
     df = pd.DataFrame(out)
     d = analysis_dir(word)
-    path = d / f"partial_correlation_{measure}.csv"
+    path = d / f"partial_correlation_{measure}_{projset}.csv"
     df.to_csv(path, index=False)
 
     print(f"\n{'='*78}")
     print("SUMMARY: significant depth-controlled associations")
     print(f"{'='*78}")
-    for proj in PROJECTIONS:
+    for proj in projections:
         s = df[df.projection == proj]
         if s.empty:
             continue
@@ -118,6 +128,8 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--word", default="bank")
     ap.add_argument("--measure", default="spectral_norm",
-                    choices=["spectral_norm", "erank"])
+                    choices=["spectral_norm", "fro_norm", "erank", "stable_rank"])
+    ap.add_argument("--projections", default="primary",
+                    choices=["primary", "supplementary", "all"])
     a = ap.parse_args()
-    run(a.word, a.measure)
+    run(a.word, a.measure, a.projections)

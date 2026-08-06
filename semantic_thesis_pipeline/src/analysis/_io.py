@@ -28,7 +28,21 @@ FAMILIES = {
 
 ALL_MODELS = FAMILIES["llama"] + FAMILIES["qwen"] + FAMILIES["bert"]
 DECODERS = FAMILIES["llama"] + FAMILIES["qwen"]
-PROJECTIONS = ["q_proj", "v_proj", "up_proj"]
+# Primary projections, pre-specified before analysis.
+#   q_proj, k_proj  attention scores are formed as Q K^T, so the two are
+#                   analysed together rather than one in isolation
+#   v_proj          attention value path
+#   up_proj         feed-forward expansion, present in every architecture
+PRIMARY_PROJECTIONS = ["q_proj", "k_proj", "v_proj", "up_proj"]
+
+# Supplementary, reported without primary claims. gate_proj is absent from
+# BERT-family encoders, so it cannot enter the cross-architecture comparison.
+SUPPLEMENTARY_PROJECTIONS = ["o_proj", "gate_proj", "down_proj"]
+
+ALL_PROJECTIONS = PRIMARY_PROJECTIONS + SUPPLEMENTARY_PROJECTIONS
+
+# Backwards-compatible default
+PROJECTIONS = PRIMARY_PROJECTIONS
 
 
 def sep_path(model: str, word: str) -> Path:

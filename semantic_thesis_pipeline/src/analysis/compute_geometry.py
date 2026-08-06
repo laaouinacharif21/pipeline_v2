@@ -140,6 +140,11 @@ def geometry(matrix: torch.Tensor, tol: float = 1e-10) -> dict:
     spectral = float(S[0]) if S.size else float("nan")
     frobenius = float(np.sqrt((S ** 2).sum())) if S.size else float("nan")
 
+    # Stable rank: ||A||_F^2 / ||A||_2^2. A second rank measure, weighting the
+    # spectrum by squared magnitude rather than by entropy as effective rank
+    # does. Reported alongside effective rank so that the two can be compared.
+    stable = float((S ** 2).sum() / (S[0] ** 2)) if S.size and S[0] > 0 else float("nan")
+
     Sp = S[S > tol]
     if Sp.size == 0:
         erank = 1.0
@@ -147,7 +152,8 @@ def geometry(matrix: torch.Tensor, tol: float = 1e-10) -> dict:
         p = Sp / Sp.sum()
         erank = float(np.exp(-np.sum(p * np.log(p + 1e-12))))
 
-    return {"spectral_norm": spectral, "fro_norm": frobenius, "erank": erank}
+    return {"spectral_norm": spectral, "fro_norm": frobenius,
+            "erank": erank, "stable_rank": stable}
 
 
 def _versions() -> dict:
@@ -189,6 +195,7 @@ def compute_model(model_name: str, cache: bool = False):
             er[f"{proj}_erank"] = g["erank"]
             st[f"{proj}_spectral_norm"] = g["spectral_norm"]
             st[f"{proj}_fro_norm"] = g["fro_norm"]
+            st[f"{proj}_stable_rank"] = g["stable_rank"]
             if i == 0:
                 shapes[proj] = list(mats[proj].shape)
         erank_rows.append(er)
