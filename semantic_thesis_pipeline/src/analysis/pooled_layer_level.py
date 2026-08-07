@@ -26,7 +26,6 @@ from scipy.stats import pearsonr, spearmanr
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from src.analysis._io import FAMILIES, merge_geometry_sep, analysis_dir, star
-from src.utils.paths import infer_family
 
 
 def z(v):

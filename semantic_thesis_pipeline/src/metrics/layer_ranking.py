@@ -10,7 +10,6 @@ selects are not the layers where sense separation peaks, and it should not
 be cited as such.
 """
 
-import numpy as np
 import pandas as pd
 
 

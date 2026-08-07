@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-import numpy as np
 
 
 def generate_heatmaps(matrices, output_dir, prefix="cosine"):
