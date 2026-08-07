@@ -174,15 +174,32 @@ def load_model_and_tokenizer(model_name, device=None):
             device_map="auto" if device is None else None,
         )
 
-    # Other LLaMA models
-    elif model_name in {
-        "llama-2-7b",
-        "llama-3-8b",
-        "llama-3.1-8b",
-    }:
+    # LLaMA-2
+    #
+    # Ships a SentencePiece model, so the LlamaTokenizer class is correct.
+    elif model_name == "llama-2-7b":
         tokenizer = LlamaTokenizer.from_pretrained(
             model_path,
         )
+
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+
+        model = LlamaForCausalLM.from_pretrained(
+            model_path,
+            dtype=torch.float16,
+            device_map="auto" if device is None else None,
+        )
+
+    # LLaMA-3 and 3.1
+    #
+    # These ship a byte-level BPE tokenizer in tokenizer.json, not a
+    # SentencePiece model. Loading them through LlamaTokenizer discards the
+    # space handling: the text does not round-trip and word boundaries fall
+    # in the wrong places ("the crane closely" -> th|ec|ran|ec|los|ely).
+    # AutoTokenizer selects the correct implementation.
+    elif model_name in {"llama-3-8b", "llama-3.1-8b"}:
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
 
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
