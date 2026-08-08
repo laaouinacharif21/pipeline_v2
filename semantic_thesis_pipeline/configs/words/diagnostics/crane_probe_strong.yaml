@@ -1,5 +1,5 @@
 word: crane
-dataset: data/raw/semantic_sentences/crane_probe_weak.json
+dataset: data/raw/diagnostics/crane_probe_strong.json
 senses:
   - bird
   - machine

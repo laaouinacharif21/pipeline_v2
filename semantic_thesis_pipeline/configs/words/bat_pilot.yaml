@@ -1,7 +1,0 @@
-word: bat
-dataset: data/raw/semantic_sentences/bat_pilot.json
-senses:
-  - mammal
-  - sport
-n_per_sense: 20
-prefix: "Example sentence: "
