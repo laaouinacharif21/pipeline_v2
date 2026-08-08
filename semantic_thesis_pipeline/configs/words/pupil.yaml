@@ -1,0 +1,7 @@
+word: pupil
+dataset: data/raw/semantic_sentences/pupil.json
+senses:
+  - eye
+  - student
+n_per_sense: 100
+prefix: "Example sentence: "

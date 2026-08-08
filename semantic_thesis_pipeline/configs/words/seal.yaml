@@ -1,0 +1,7 @@
+word: seal
+dataset: data/raw/semantic_sentences/seal.json
+senses:
+  - animal
+  - closure
+n_per_sense: 100
+prefix: "Example sentence: "

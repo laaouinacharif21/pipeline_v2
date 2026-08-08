@@ -1,0 +1,7 @@
+word: club
+dataset: data/raw/semantic_sentences/club.json
+senses:
+  - implement
+  - organisation
+n_per_sense: 100
+prefix: "Example sentence: "

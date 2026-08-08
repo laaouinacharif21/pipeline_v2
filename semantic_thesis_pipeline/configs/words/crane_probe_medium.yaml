@@ -1,0 +1,7 @@
+word: crane
+dataset: data/raw/semantic_sentences/crane_probe_medium.json
+senses:
+  - bird
+  - machine
+n_per_sense: 10
+prefix: "Example sentence: "

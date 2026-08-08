@@ -1,0 +1,7 @@
+word: bat
+dataset: data/raw/semantic_sentences/bat.json
+senses:
+  - mammal
+  - sport
+n_per_sense: 100
+prefix: "Example sentence: "

@@ -1,0 +1,7 @@
+word: plant
+dataset: data/raw/semantic_sentences/plant.json
+senses:
+  - factory
+  - vegetation
+n_per_sense: 100
+prefix: "Example sentence: "
