@@ -76,14 +76,16 @@ def fig_by_family(words, out_dir):
                 continue
             ax.plot(GRID, mean, linewidth=2.2, color=COLOURS.get(w),
                     linestyle="--" if w == UNCONTROLLED else "-",
-                    label=w + (" (uncontrolled)" if w == UNCONTROLLED else ""))
+                    label=w + (" (high-context)" if w == UNCONTROLLED else ""))
         ax.set_title(TITLES[family])
         ax.set_xlabel("Relative depth")
         ax.axhline(0, color="grey", linewidth=1, linestyle=":", alpha=0.7)
         ax.grid(axis="y", linestyle="--", alpha=0.3)
         ax.set_axisbelow(True)
     axes[0].set_ylabel("Semantic separation  Sep(l)")
-    axes[0].legend(loc="upper left")
+    axes[0].legend(loc="lower right", framealpha=0.9)
+    fig.suptitle("Layer-wise semantic separation across model architectures",
+                 fontsize=19, y=1.02)
     plt.tight_layout()
     out = out_dir / "fig_separation_by_family.png"
     fig.savefig(out)
@@ -107,18 +109,31 @@ def fig_controlled_vs_bank(words, out_dir):
             m, sd = a.mean(axis=0), a.std(axis=0)
             ax.fill_between(GRID, m - sd, m + sd, color="#1f77b4", alpha=0.18)
             ax.plot(GRID, m, linewidth=2.6, color="#1f77b4",
-                    label=f"controlled words, mean of {len(stack)}")
+                    label=f"six controlled datasets (mean)")
+            j = int(np.argmax(m))
+            ax.plot(GRID[j], m[j], marker="o", markersize=8,
+                    color="#1f77b4", zorder=5)
+            ax.annotate(f"peak {GRID[j]:.2f}", xy=(GRID[j], m[j]),
+                        xytext=(6, -16), textcoords="offset points",
+                        fontsize=11, color="#1f77b4")
         bm, _ = family_curve(family, UNCONTROLLED)
         if bm is not None:
             ax.plot(GRID, bm, linewidth=2.4, color="#2C2C2A", linestyle="--",
-                    label=f"{UNCONTROLLED} (uncontrolled)")
+                    label=f"{UNCONTROLLED} dataset (high context)")
+            j = int(np.argmax(bm))
+            ax.plot(GRID[j], bm[j], marker="s", markersize=8, color="#2C2C2A", zorder=5)
+            ax.annotate(f"peak {GRID[j]:.2f}", xy=(GRID[j], bm[j]),
+                        xytext=(6, 6), textcoords="offset points",
+                        fontsize=11, color="#2C2C2A")
         ax.set_title(TITLES[family])
         ax.set_xlabel("Relative depth")
         ax.axhline(0, color="grey", linewidth=1, linestyle=":", alpha=0.7)
         ax.grid(axis="y", linestyle="--", alpha=0.3)
         ax.set_axisbelow(True)
     axes[0].set_ylabel("Semantic separation  Sep(l)")
-    axes[0].legend(loc="upper left")
+    axes[0].legend(loc="lower right", framealpha=0.9)
+    fig.suptitle("Semantic separation peaks at different depths by dataset construction",
+                 fontsize=19, y=1.02)
     plt.tight_layout()
     out = out_dir / "fig_separation_controlled_vs_bank.png"
     fig.savefig(out)
@@ -149,6 +164,32 @@ def main():
     print(f"\nSeparation curves   words: {len(words)}\n")
     fig_by_family(words, out_dir)
     fig_controlled_vs_bank(words, out_dir)
+
+    # A shared y-axis makes the contrast with bank readable but compresses the
+    # controlled words. This version drops bank and scales each panel to its
+    # own range, so the shape of the controlled curves is visible.
+    controlled = [w for w in words if w != UNCONTROLLED]
+    fig, axes = plt.subplots(1, 3, figsize=(19, 5.6))
+    for ax, family in zip(axes, ["llama", "qwen", "bert"]):
+        for w in controlled:
+            mean, _ = family_curve(family, w)
+            if mean is not None:
+                ax.plot(GRID, mean, linewidth=2.4, color=COLOURS.get(w), label=w)
+        ax.set_title(TITLES[family])
+        ax.set_xlabel("Relative depth")
+        ax.axhline(0, color="grey", linewidth=1, linestyle=":", alpha=0.7)
+        ax.grid(axis="y", linestyle="--", alpha=0.3)
+        ax.set_axisbelow(True)
+    axes[0].set_ylabel("Semantic separation  Sep(l)")
+    axes[-1].legend(loc="center left", bbox_to_anchor=(1.02, 0.5),
+                    fontsize=12, frameon=False)
+    fig.suptitle("Controlled datasets only, scaled independently per family",
+                 fontsize=19, y=1.02)
+    plt.tight_layout()
+    out = out_dir / "fig_separation_controlled_only.png"
+    fig.savefig(out); fig.savefig(out.with_suffix(".pdf")); plt.close()
+    print(f"  Saved -> {out}")
+
     peak_summary(words)
 
 
