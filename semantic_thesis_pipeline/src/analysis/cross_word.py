@@ -39,8 +39,16 @@ COLUMN = {
 }
 
 
-def residualise(a, b):
-    return a - np.polyval(np.polyfit(b, a, 1), b)
+def residualise(a, b, degree=1):
+    """Remove the component of a explained by a polynomial in b.
+
+    Depth is controlled linearly by default. Both geometry and separation vary
+    smoothly with depth, so a linear control can leave shared curvature in the
+    residuals; the quadratic control is reported alongside as a stress test.
+    Higher degrees are not used: with 28 to 36 layers per model, a cubic fit
+    absorbs most of the variance in both variables.
+    """
+    return a - np.polyval(np.polyfit(b, a, degree), b)
 
 
 def cell(model, word, measure, proj):
@@ -52,10 +60,18 @@ def cell(model, word, measure, proj):
     if col not in m.columns or m[col].isna().all() or m[col].std() == 0:
         return None
     depth = m["layer"].values.astype(float)
-    rg = residualise(m[col].values, depth)
-    rs = residualise(m["separation"].values, depth)
+    g, s = m[col].values, m["separation"].values
+
+    rg, rs = residualise(g, depth), residualise(s, depth)
     r, p = stats.pearsonr(rg, rs)
-    return {"r": r, "p": p, "n": len(m)}
+    sr, sp = stats.spearmanr(rg, rs)
+
+    qg, qs = residualise(g, depth, 2), residualise(s, depth, 2)
+    rq, pq = stats.pearsonr(qg, qs)
+
+    return {"r": r, "p": p, "n": len(m),
+            "spearman_r": sr, "spearman_p": sp,
+            "r_quad": rq, "p_quad": pq}
 
 
 def run(measure, proj, words):
@@ -81,6 +97,10 @@ def run(measure, proj, words):
                 rows.append({"family": fam, "model": model, "word": w,
                              "projection": proj, "measure": measure,
                              "partial_r": c["r"], "partial_p": c["p"],
+                             "partial_spearman_r": c["spearman_r"],
+                             "partial_spearman_p": c["spearman_p"],
+                             "partial_r_quad": c["r_quad"],
+                             "partial_p_quad": c["p_quad"],
                              "n_layers": c["n"], "sig": star(c["p"])})
             print(line)
 
@@ -92,18 +112,29 @@ def run(measure, proj, words):
     print(f"\n{'=' * 78}")
     print("CONSISTENCY ACROSS WORDS")
     print(f"{'=' * 78}")
-    print(f"  {'word':<14}{'decoders sig':>14}{'encoders sig':>14}{'mean r (dec)':>14}{'sign':>8}")
-    print("  " + "-" * 64)
+    print(f"  {'word':<12}{'dec sig':>9}{'enc sig':>9}{'mean r':>9}"
+          f"{'quad r':>9}{'quad sig':>10}")
+    print("  " + "-" * 60)
     for w in words:
         d = df[(df.word == w) & (df.model.isin(DECODERS))]
         e = df[(df.word == w) & (~df.model.isin(DECODERS))]
         if d.empty:
             continue
-        nd = (d.partial_p < .05).sum()
-        ne = (e.partial_p < .05).sum()
-        mr = d.partial_r.mean()
-        print(f"  {w:<14}{f'{nd}/{len(d)}':>14}{f'{ne}/{len(e)}':>14}"
-              f"{mr:>+14.3f}{'neg' if mr < 0 else 'pos':>8}")
+        print(f"  {w:<12}{f'{(d.partial_p < .05).sum()}/{len(d)}':>9}"
+              f"{f'{(e.partial_p < .05).sum()}/{len(e)}':>9}"
+              f"{d.partial_r.mean():>+9.3f}{d.partial_r_quad.mean():>+9.3f}"
+              f"{f'{(d.partial_p_quad < .05).sum()}/{len(d)}':>10}")
+
+    print("\n  Quadratic depth control, decoders by family")
+    print(f"    {'family':<8}{'linear':>9}{'quadratic':>11}{'retained':>10}")
+    print("    " + "-" * 38)
+    for fam in ["llama", "qwen"]:
+        d = df[(df.family == fam) & (df.model.isin(DECODERS))]
+        if d.empty:
+            continue
+        lin, quad = d.partial_r.mean(), d.partial_r_quad.mean()
+        print(f"    {fam:<8}{lin:>+9.3f}{quad:>+11.3f}"
+              f"{(abs(quad) / abs(lin) if lin else 0):>9.0%}")
 
     if len(words) > 1:
         print(f"\n  Per-model consistency (decoders, significant in how many words):")

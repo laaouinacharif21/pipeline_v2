@@ -38,9 +38,11 @@ from src.utils.paths import get_model_result_dir, get_standard_result_files
 
 SEED = 0
 
+# qwen-7b is included here because this stage reads stored embeddings and
+# never loads a model, so it does not need its own environment.
 ALL_MODELS = [
     "llama-7b", "llama-2-7b", "llama-3-8b", "llama-3.1-8b",
-    "qwen1.5-7b", "qwen2-7b", "qwen2.5-7b", "qwen3-8b",
+    "qwen-7b", "qwen1.5-7b", "qwen2-7b", "qwen2.5-7b", "qwen3-8b",
     "bert-base", "roberta-base", "spanbert-base-cased", "xlm-roberta-base",
 ]
 
@@ -67,9 +69,19 @@ def run_model(model_name, word, paired=True):
     labels = np.array(json.load(open(files["labels"]))["labels"])
     n, n_layers, _ = emb.shape
 
-    # Sentences are emitted one per sense in sequence, so consecutive pairs
-    # share a frame. Without pairing, each sentence is its own group.
-    groups = np.array([i // 2 for i in range(n)]) if paired else np.arange(n)
+    # Folds are formed over groups so that a near-duplicate of a test item
+    # cannot appear in training. Datasets that record their own grouping use
+    # it; otherwise sentences are emitted one per class in sequence, so
+    # consecutive indices form a pair.
+    gpath = files["embedding_tensor"].parent / "groups.json"
+    if gpath.exists():
+        groups = np.array(json.load(open(gpath))["groups"])
+        if len(groups) != n:
+            groups = np.array([i // 2 for i in range(n)])
+    elif paired:
+        groups = np.array([i // 2 for i in range(n)])
+    else:
+        groups = np.arange(n)
 
     rows = []
     for l in range(n_layers):

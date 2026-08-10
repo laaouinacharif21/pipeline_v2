@@ -1,0 +1,7 @@
+word: truthfulqa_qonly
+dataset: data/raw/semantic_sentences/truthfulqa_qonly.json
+senses:
+  - false
+  - true
+n_per_sense: 798
+prefix: "Consider the following statement: "
