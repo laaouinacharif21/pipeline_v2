@@ -122,6 +122,52 @@ def test_erank_bounds():
         check(f"{m}", ok)
 
 
+def test_intervention_conditions():
+    """The three intervention conditions must do what they claim.
+
+    Rotation replaces the singular vectors and leaves the singular values
+    untouched, so every spectral statistic is preserved and only the learned
+    directions change. Truncation discards trailing directions, so the
+    retained spectrum is more concentrated and stable rank falls. Noise is
+    scaled to match the Frobenius change produced by truncation at the same
+    ratio, so the two perturbations are comparable in magnitude.
+    """
+    import torch
+    from src.analysis.intervention import truncate, rotate, add_noise, spectral_stats
+
+    print("\n[7] intervention conditions")
+    torch.manual_seed(0)
+    W = torch.randn(256, 128)
+    base = spectral_stats(W)
+
+    Wr = rotate(W, torch.Generator().manual_seed(0))
+    rot = spectral_stats(Wr)
+    for k in ("spectral_norm", "fro_norm", "stable_rank", "erank"):
+        rel = abs(rot[k] - base[k]) / base[k]
+        check(f"rotation preserves {k}", rel < 1e-3, f"changed by {rel:.2%}")
+    ang = float(torch.nn.functional.cosine_similarity(
+        W.flatten(), Wr.flatten(), dim=0).abs())
+    check("rotation changes the directions", ang < 0.2, f"cosine {ang:.3f}")
+
+    prev = base["stable_rank"]
+    monotone = True
+    for ratio in (0.95, 0.90, 0.80):
+        Wt, k = truncate(W, ratio)
+        st = spectral_stats(Wt)
+        if st["stable_rank"] >= prev:
+            monotone = False
+        prev = st["stable_rank"]
+    check("truncation lowers stable rank monotonically", monotone)
+    check("truncation keeps fewer directions", k < min(W.shape), f"k={k}")
+
+    Wt, _ = truncate(W, 0.90)
+    delta = float(torch.linalg.norm(W - Wt))
+    Wn = add_noise(W, delta, torch.Generator().manual_seed(0))
+    got = float(torch.linalg.norm(W - Wn))
+    check("noise matches the truncation perturbation",
+          abs(got - delta) / delta < 1e-3, f"{got:.3f} against {delta:.3f}")
+
+
 if __name__ == "__main__":
     from src.utils.paths import get_results_root
     print(f"Pipeline integrity checks  (word='{WORD}')")
@@ -135,6 +181,7 @@ if __name__ == "__main__":
     test_geometry_deterministic()
     test_qwen7b_projections_distinct()
     test_erank_bounds()
+    test_intervention_conditions()
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed")
     if FAIL:
         print("Failures:", ", ".join(FAIL))
