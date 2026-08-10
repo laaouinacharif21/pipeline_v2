@@ -15,6 +15,7 @@ import sys
 import traceback
 
 from src.pipeline.extract_embeddings_target import run_extraction_target
+from src.pipeline.extract_embeddings_final_token import run_extraction_final_token
 from src.pipeline.compute_metrics import run_metrics
 from src.pipeline.generate_plots import run_plots
 from src.pipeline.select_layers import run_layer_selection
@@ -29,9 +30,12 @@ ALL_MODELS = [
 STAGES = ["extract", "metrics", "plots", "select_layers", "all"]
 
 
-def run_one(model, word, stage, batch_size, strict):
+def run_one(model, word, stage, batch_size, strict, final_token=False):
     if stage in ("extract", "all"):
-        run_extraction_target(model, word, batch_size=batch_size, strict=strict)
+        if final_token:
+            run_extraction_final_token(model, word, batch_size=batch_size)
+        else:
+            run_extraction_target(model, word, batch_size=batch_size, strict=strict)
     if stage in ("metrics", "all"):
         run_metrics(model, word)
     if stage in ("select_layers", "all"):
@@ -53,6 +57,8 @@ def main():
     ap.add_argument("--skip", type=str, default="",
                     help="Comma-separated models to skip")
     ap.add_argument("--continue-on-error", action="store_true")
+    ap.add_argument("--final-token", action="store_true",
+                    help="Take the last token rather than locating a target word")
     args = ap.parse_args()
 
     strict = not args.no_strict
@@ -71,7 +77,7 @@ def main():
     for i, m in enumerate(models, 1):
         print(f"\n{'='*70}\n[{i}/{len(models)}] {m}\n{'='*70}")
         try:
-            run_one(m, args.word, args.stage, args.batch_size, strict)
+            run_one(m, args.word, args.stage, args.batch_size, strict, args.final_token)
         except Exception as e:
             failed.append((m, type(e).__name__, str(e).split("\n")[0]))
             print(f"\n!! FAILED: {m}: {type(e).__name__}: {e}")
