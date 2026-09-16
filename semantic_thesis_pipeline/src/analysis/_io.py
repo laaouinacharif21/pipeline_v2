@@ -69,13 +69,53 @@ def load_params(model: str):
     return pd.read_csv(p).sort_values("layer").reset_index(drop=True)
 
 
-def merge_geometry_sep(model: str, word: str, which: str = "erank"):
-    """Merge geometry with Sep(l) on shared layer indices."""
+ALIGNMENTS = ("post", "pre")
+
+
+def align_geometry_sep(geo, sep, alignment: str = "post"):
+    """Pair per-block geometry with per-hidden-state separation.
+
+    Index conventions
+        geo  "layer" l   = transformer block l            (n_blocks rows)
+        sep  "layer" 0   = embedding output               (n_blocks + 1 rows)
+             "layer" l+1 = output of transformer block l
+
+    alignment
+        "post"  block l <-> hidden state l+1, the output of the block (primary)
+        "pre"   block l <-> hidden state l, the input to the block
+                (the pairing used before September 2026)
+
+    "layer" in the result stays the block index, so depth control is identical
+    under both alignments; "hidden_layer" records the hidden state used.
+    """
+    if alignment not in ALIGNMENTS:
+        raise ValueError(f"alignment must be one of {ALIGNMENTS}, got {alignment!r}")
+    g_idx = geo["layer"].astype(int).tolist()
+    s_idx = sep["layer"].astype(int).tolist()
+    if g_idx != list(range(len(g_idx))):
+        raise ValueError(f"geometry layers not contiguous from 0: {g_idx[:6]}")
+    if s_idx != list(range(len(s_idx))):
+        raise ValueError(f"separation layers not contiguous from 0: {s_idx[:6]}")
+    if len(s_idx) != len(g_idx) + 1:
+        raise ValueError(
+            f"expected {len(g_idx) + 1} hidden states for {len(g_idx)} blocks "
+            f"(embedding + one per block), got {len(s_idx)}")
+    shift = 1 if alignment == "post" else 0
+    g = geo.copy()
+    g["hidden_layer"] = g["layer"].astype(int) + shift
+    s = sep.rename(columns={"layer": "hidden_layer"})
+    s["hidden_layer"] = s["hidden_layer"].astype(int)
+    return g.merge(s, on="hidden_layer", how="inner", validate="one_to_one")
+
+
+def merge_geometry_sep(model: str, word: str, which: str = "erank",
+                       alignment: str = "post"):
+    """Merge block geometry with Sep(l). See align_geometry_sep for alignment."""
     geo = load_erank(model) if which == "erank" else load_params(model)
     sep = load_sep(model, word)
     if geo is None or sep is None:
         return None
-    m = geo.merge(sep, on="layer")
+    m = align_geometry_sep(geo, sep, alignment=alignment)
     return m if len(m) >= 5 else None
 
 
