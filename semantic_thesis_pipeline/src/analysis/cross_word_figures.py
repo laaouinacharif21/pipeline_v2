@@ -203,7 +203,7 @@ def fig_model_consistency(models, summary, projection, measure, alignment, out_d
                Line2D([], [], marker="s", color="black", markerfacecolor="white", linestyle="none",
                       label="quadratic depth control"),
                Patch(color=DEC_C, label="decoder"), Patch(color=ENC_C, label="encoder")]
-    ax.legend(handles=handles, loc="lower right", fontsize=9)
+    ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(1.01, 1), fontsize=9, frameon=False)
 
     foot = (f"Decoders, model-level: linear {fmt_summary(srow(summary, 'decoders', 'linear'))};  "
             f"quadratic {fmt_summary(srow(summary, 'decoders', 'quadratic'))}. Exploratory.")
@@ -241,7 +241,7 @@ def fig_compare(primary, other, alignment, out_dir):
     axes[0].set_yticks(y)
     axes[0].set_yticklabels(order)
     axes[0].invert_yaxis()
-    axes[1].legend(loc="lower right", fontsize=9)
+    axes[1].legend(loc="upper left", bbox_to_anchor=(1.01, 1), fontsize=9, frameon=False)
     fig.suptitle("Per-model association with Sep: primary against comparison measure", y=1.02)
     plt.tight_layout()
     save(fig, out_dir, f"fig5_compare_{p1}_{m1}_vs_{p2}_{m2}{tag(alignment)}")
