@@ -1,28 +1,33 @@
 # -*- coding: utf-8 -*-
 """
-Summary tables for the cross-word study.
+Summary tables for the cross-word study (revised September 2026).
 
-Produces three tables from data already on disk:
+Produces, from data already on disk:
 
-    A  dataset properties per word: size, lexical overlap, sentence length,
-       context-only and target-only classification accuracy, and the largest
-       semantic separation reached
-    B  per-model association: mean partial correlation and the number of words
-       reaching significance, for one projection and measure
-    C  architecture summary: decoder against encoder, with and without a named
-       word as a leakage control
+    A   dataset properties per word: size, lexical overlap, sentence length,
+        context-only and target-only classification accuracy, and the largest
+        semantic separation reached                              (unchanged)
+    B   per model: mean partial r over words, range, words positive, and the
+        circular-shift permutation p, under linear and quadratic depth control
+    C   model-level tests by group (decoders, llama, qwen, encoders) and for
+        decoders with a named word excluded: mean of per-model r, sign count,
+        leave-one-model-out range, t-test and Wilcoxon p (exploratory)
+    S1  supplementary: share of decoder and encoder cells with p < 0.05 under
+        the naive per-cell test and under the effective-n correction, with the
+        mean effective n and residual lag-1 autocorrelation
+    S2  supplementary: pre-block against post-block alignment, model-level
 
-Each table is printed and written to CSV. Nothing is recomputed from the
-models; the tables read the outputs of cross_word.py, context_baseline.py and
-the metrics stage.
+Nothing is recomputed from the models. B, C and S1 read the outputs of
+cross_word.py for the chosen alignment; S2 needs both alignments on disk.
+No per-cell significance is reported in the main tables.
 
 Usage
     python -m src.analysis.results_tables
-    python -m src.analysis.results_tables --measure spectral_norm --projection up_proj
+    python -m src.analysis.results_tables --measure erank --projection up_proj
+    python -m src.analysis.results_tables --alignment pre
 """
 
 import argparse
-import json
 import re
 import sys
 from pathlib import Path
@@ -31,15 +36,18 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from src.analysis._io import DECODERS, ALL_MODELS, load_sep
-from src.utils.paths import get_results_root, get_project_root, ensure_dir
+from src.analysis._io import ALIGNMENTS, ALL_MODELS, DECODERS, load_sep  # noqa: E402
+from src.utils.paths import ensure_dir, get_results_root  # noqa: E402
 
 WORDS = ["bank", "bat", "crane", "seal", "plant", "pupil", "club"]
+GROUP_ORDER = ["decoders", "llama", "qwen", "encoders"]
 
 
 def _tok(s):
     return re.findall(r"[a-z']+", s.lower())
 
+
+# ---------------------------------------------------------------- Table A
 
 def dataset_properties(word):
     """Size, class balance, lexical overlap and sentence length.
@@ -126,80 +134,163 @@ def table_a(words, out_dir):
     return df
 
 
-def table_b(projection, measure, words, out_dir):
-    p = (get_results_root() / "analysis" / "_cross_word"
-         / f"cross_word_{projection}_{measure}.csv")
+# ------------------------------------------------------- cross_word inputs
+
+def cw_stem(projection, measure, alignment):
+    sfx = "" if alignment == "post" else f"_{alignment}"
+    return get_results_root() / "analysis" / "_cross_word" / f"cross_word_{projection}_{measure}{sfx}"
+
+
+def read_cw(projection, measure, alignment, kind):
+    """kind: '' (cells), '_models' or '_summary'. Returns None if missing."""
+    p = Path(f"{cw_stem(projection, measure, alignment)}{kind}.csv")
     if not p.exists():
-        print(f"\n  [skip] Table B: {p.name} not found")
+        print(f"\n  [skip] {p.name} not found -- run cross_word.py "
+              f"--measure {measure} --projection {projection} --alignment {alignment}")
         return None
     d = pd.read_csv(p)
-    d = d[d.word.isin(words)]
+    if kind == "" and "partial_r_quad" not in d.columns:
+        raise SystemExit(f"{p.name} is in the pre-revision format. Rerun cross_word.py.")
+    return d
 
-    rows = []
-    for m in ALL_MODELS:
-        s = d[d.model == m]
-        if s.empty:
-            continue
-        rows.append({
-            "model": m,
-            "architecture": "decoder" if m in DECODERS else "encoder",
-            "mean_r": s.partial_r.mean(),
-            "min_r": s.partial_r.min(),
-            "max_r": s.partial_r.max(),
-            "n_significant": int((s.partial_p < .05).sum()),
-            "n_words": len(s),
-            "sign_consistent": bool(len(set(np.sign(s.partial_r))) == 1),
-        })
-    df = pd.DataFrame(rows)
 
-    print(f"\nTable B  {projection} {measure.replace('_', ' ')} by model")
-    print(f"  {'model':<22}{'arch':>9}{'mean r':>9}{'range':>18}"
-          f"{'significant':>13}{'sign':>12}")
-    print("  " + "-" * 84)
+def fmt_p(p):
+    return "   n/a" if pd.isna(p) else f"{p:6.4f}"
+
+
+# ---------------------------------------------------------------- Table B
+
+def table_b(projection, measure, alignment, words, out_dir, sfx):
+    M = read_cw(projection, measure, alignment, "_models")
+    if M is None:
+        return None
+    if set(M.n_words) != {len(words)}:
+        print(f"  [warn] Table B: models file has n_words {sorted(set(M.n_words))}, "
+              f"expected {len(words)}. Rerun cross_word.py with the same words.")
+    order = [m for m in ALL_MODELS if m in set(M.model)]
+    M = M.set_index("model").loc[order].reset_index()
+    cols = ["model", "arch", "n_layers", "n_words",
+            "mean_r", "min_r", "max_r", "n_words_positive", "perm_p",
+            "mean_r_quad", "min_r_quad", "max_r_quad", "n_words_positive_quad", "perm_p_quad"]
+    df = M[cols]
+
+    print(f"\nTable B  {projection} {measure.replace('_', ' ')} by model  (alignment={alignment})")
+    print("  mean partial r over words [range], words positive, circular-shift permutation p")
+    print(f"  {'model':<20}{'arch':>8}{'linear':>9}{'range':>17}{'pos':>6}{'perm p':>8}"
+          f"{'quad':>9}{'range':>17}{'pos':>6}{'perm p':>8}")
+    print("  " + "-" * 108)
     for _, r in df.iterrows():
-        rng = f"{r.min_r:+.2f} to {r.max_r:+.2f}"
-        print(f"  {r.model:<22}{r.architecture:>9}{r.mean_r:>+9.3f}{rng:>18}"
-              f"{f'{r.n_significant}/{r.n_words}':>13}"
-              f"{'consistent' if r.sign_consistent else 'varies':>12}")
-    df.to_csv(out_dir / f"table_b_by_model_{projection}_{measure}.csv", index=False)
+        print(f"  {r.model:<20}{r.arch:>8}{r.mean_r:>+9.3f}  [{r.min_r:+.2f},{r.max_r:+.2f}]"
+              f"{f'{r.n_words_positive}/{r.n_words}':>6}{r.perm_p:>8.3f}"
+              f"{r.mean_r_quad:>+9.3f}  [{r.min_r_quad:+.2f},{r.max_r_quad:+.2f}]"
+              f"{f'{r.n_words_positive_quad}/{r.n_words}':>6}{r.perm_p_quad:>8.3f}")
+    df.to_csv(out_dir / f"table_b_by_model_{projection}_{measure}{sfx}.csv", index=False)
     return df
 
 
-def table_c(projection, measure, words, exclude, out_dir):
-    p = (get_results_root() / "analysis" / "_cross_word"
-         / f"cross_word_{projection}_{measure}.csv")
-    if not p.exists():
-        return None
-    d = pd.read_csv(p)
-    d = d[d.word.isin(words)]
+# ---------------------------------------------------------------- Table C
 
+def table_c(projection, measure, alignment, exclude, out_dir, sfx):
+    T = read_cw(projection, measure, alignment, "_summary")
+    if T is None:
+        return None
     rows = []
-    for label, sub in [("all words", d),
-                       (f"excluding {exclude}", d[d.word != exclude])]:
-        for arch, mask in [("decoder", sub.model.isin(DECODERS)),
-                           ("encoder", ~sub.model.isin(DECODERS))]:
-            s = sub[mask]
-            if s.empty:
-                continue
+    for g in GROUP_ORDER:
+        rows.append(T[(T.group == g) & (T.words == "all")])
+    if exclude:
+        wo = T[(T.group == "decoders") & (T.words == f"without_{exclude}")]
+        if wo.empty:
+            print(f"  [warn] Table C: no leave-out rows for '{exclude}'")
+        rows.append(wo)
+    df = pd.concat(rows, ignore_index=True)
+    df.insert(0, "subset", np.where(df.words == "all", "all words", "excluding " + df.words.str.replace("without_", "")))
+    cols = ["subset", "group", "control", "n_models", "mean", "median", "n_positive", "n_negative",
+            "loo_min", "loo_max", "loo_min_dropped", "loo_max_dropped", "t_p", "wilcoxon_p"]
+    df = df[cols]
+
+    print(f"\nTable C  {projection} {measure.replace('_', ' ')}: model-level tests  (alignment={alignment})")
+    print("  one value per model; p-values exploratory (models are not independent samples)")
+    print(f"  {'subset':<18}{'group':<10}{'control':<11}{'mean':>8}{'pos':>7}"
+          f"{'LOO range':>18}{'t p':>9}{'Wilcoxon p':>12}")
+    print("  " + "-" * 93)
+    for _, r in df.iterrows():
+        print(f"  {r.subset:<18}{r.group:<10}{r.control:<11}{r['mean']:>+8.3f}"
+              f"{f'{r.n_positive}/{r.n_models}':>7}"
+              f"{f'[{r.loo_min:+.3f},{r.loo_max:+.3f}]':>18}"
+              f"{fmt_p(r.t_p):>9}{fmt_p(r.wilcoxon_p):>12}")
+    print("  (groups of 4 models: the smallest attainable Wilcoxon p is 0.125)")
+    df.to_csv(out_dir / f"table_c_by_architecture_{projection}_{measure}{sfx}.csv", index=False)
+    return df
+
+
+# --------------------------------------------------------------- Table S1
+
+def table_s1(projection, measure, alignment, out_dir, sfx):
+    C = read_cw(projection, measure, alignment, "")
+    if C is None:
+        return None
+    rows = []
+    for arch in ["decoder", "encoder"]:
+        a = C[C.arch == arch]
+        if a.empty:
+            continue
+        for q, control in (("", "linear"), ("_quad", "quadratic")):
             rows.append({
-                "subset": label, "architecture": arch,
-                "mean_r": s.partial_r.mean(),
-                "sd_r": s.partial_r.std(),
-                "significant_cells": int((s.partial_p < .05).sum()),
-                "total_cells": len(s),
-                "proportion": (s.partial_p < .05).mean(),
+                "architecture": arch, "control": control, "cells": len(a),
+                "share_p05_naive": (a[f"partial_p{q}_naive"] < .05).mean(),
+                "share_p05_effective_n": (a[f"partial_p{q}_eff"] < .05).mean(),
+                "mean_n_layers": a.n_layers.mean(),
+                "mean_n_eff": a[f"n_eff{q}"].mean(),
+                "mean_lag1_geometry": a[f"lag1_geometry{q}"].mean(),
+                "mean_lag1_sep": a[f"lag1_sep{q}"].mean(),
             })
     df = pd.DataFrame(rows)
 
-    print(f"\nTable C  {projection} {measure.replace('_', ' ')} by architecture")
-    print(f"  {'subset':<20}{'arch':>9}{'mean r':>9}{'sd':>8}"
-          f"{'significant':>15}{'proportion':>12}")
-    print("  " + "-" * 74)
+    print(f"\nTable S1  Sensitivity: per-cell significance under layer dependence  (alignment={alignment})")
+    print(f"  {'arch':<9}{'control':<11}{'cells':>6}{'naive':>8}{'eff-n':>8}"
+          f"{'layers':>8}{'n_eff':>7}{'lag1 geo':>10}{'lag1 sep':>10}")
+    print("  " + "-" * 77)
     for _, r in df.iterrows():
-        cells = f"{r.significant_cells}/{r.total_cells}"
-        print(f"  {r.subset:<20}{r.architecture:>9}{r.mean_r:>+9.3f}{r.sd_r:>8.3f}"
-              f"{cells:>15}{r.proportion:>12.0%}")
-    df.to_csv(out_dir / f"table_c_by_architecture_{projection}_{measure}.csv", index=False)
+        print(f"  {r.architecture:<9}{r.control:<11}{r.cells:>6}{r.share_p05_naive:>8.1%}"
+              f"{r.share_p05_effective_n:>8.1%}{r.mean_n_layers:>8.1f}{r.mean_n_eff:>7.1f}"
+              f"{r.mean_lag1_geometry:>10.3f}{r.mean_lag1_sep:>10.3f}")
+    print("  (effective n assumes AR(1) dependence; a sensitivity check, not a definitive test)")
+    df.to_csv(out_dir / f"table_s1_sensitivity_{projection}_{measure}{sfx}.csv", index=False)
+    return df
+
+
+# --------------------------------------------------------------- Table S2
+
+def table_s2(projection, measure, out_dir):
+    frames = {}
+    for al in ALIGNMENTS:
+        p = Path(f"{cw_stem(projection, measure, al)}_summary.csv")
+        if not p.exists():
+            print(f"\n  [skip] Table S2: {p.name} not found (needs both alignments)")
+            return None
+        frames[al] = pd.read_csv(p)
+    rows = []
+    for g in ["decoders", "llama", "qwen", "encoders"]:
+        for control in ["linear", "quadratic"]:
+            row = {"group": g, "control": control}
+            for al, T in frames.items():
+                r = T[(T.group == g) & (T.control == control) & (T.words == "all")]
+                if r.empty:
+                    continue
+                r = r.iloc[0]
+                row.update({f"{al}_mean": r["mean"], f"{al}_positive": f"{r.n_positive}/{r.n_models}",
+                            f"{al}_t_p": r.t_p, f"{al}_wilcoxon_p": r.wilcoxon_p})
+            rows.append(row)
+    df = pd.DataFrame(rows)
+
+    print(f"\nTable S2  Sensitivity: pre-block against post-block alignment, model-level")
+    print(f"  {'group':<10}{'control':<11}{'post':>8}{'pos':>6}{'W p':>8}{'pre':>9}{'pos':>6}{'W p':>8}")
+    print("  " + "-" * 66)
+    for _, r in df.iterrows():
+        print(f"  {r.group:<10}{r.control:<11}{r.post_mean:>+8.3f}{r.post_positive:>6}"
+              f"{fmt_p(r.post_wilcoxon_p):>8}{r.pre_mean:>+9.3f}{r.pre_positive:>6}"
+              f"{fmt_p(r.pre_wilcoxon_p):>8}")
+    df.to_csv(out_dir / f"table_s2_alignment_{projection}_{measure}.csv", index=False)
     return df
 
 
@@ -209,18 +300,22 @@ def main():
     ap.add_argument("--projection", default="q_proj")
     ap.add_argument("--exclude", default="bank")
     ap.add_argument("--words", default=",".join(WORDS))
+    ap.add_argument("--alignment", default="post", choices=list(ALIGNMENTS))
     a = ap.parse_args()
 
     words = [w.strip() for w in a.words.split(",") if w.strip()]
     out_dir = ensure_dir(get_results_root() / "analysis" / "_tables")
+    sfx = "" if a.alignment == "post" else f"_{a.alignment}"
 
     print(f"\n{'=' * 88}")
-    print(f"RESULTS TABLES   {a.projection} {a.measure}   words: {len(words)}")
+    print(f"RESULTS TABLES   {a.projection} {a.measure}   words: {len(words)}   alignment: {a.alignment}")
     print(f"{'=' * 88}")
 
     table_a(words, out_dir)
-    table_b(a.projection, a.measure, words, out_dir)
-    table_c(a.projection, a.measure, words, a.exclude, out_dir)
+    table_b(a.projection, a.measure, a.alignment, words, out_dir, sfx)
+    table_c(a.projection, a.measure, a.alignment, a.exclude, out_dir, sfx)
+    table_s1(a.projection, a.measure, a.alignment, out_dir, sfx)
+    table_s2(a.projection, a.measure, out_dir)
 
     print(f"\nSaved -> {out_dir}")
 
