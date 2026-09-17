@@ -3,7 +3,8 @@
 Reproducibility test for Table 5 (src/analysis/intervention_tables.py).
 
 Expected values were computed directly from the raw per-model CSVs during the
-September 2026 audit, independently of this script.
+September 2026 audit, independently of this script. The v_proj grid was
+completed on 17 September 2026 with qwen-7b (27 cells, 9 models).
 
 Run:  python -m tests.test_intervention_tables
 """
@@ -67,12 +68,20 @@ if __name__ == "__main__":
     got = set(map(tuple, Cq[Cq.peak_shifted][["model", "word", "peak_layer_base", "peak_layer_after"]].values))
     check("exactly the 6 audited peak shifts", got == expected_shifts, f"got {sorted(got)}")
 
-    print("\n[B] v_proj truncate 0.80")
-    check("24 cells, 8 models", len(Cv) == 24 and Cv.model.nunique() == 8, f"{len(Cv)} cells")
-    check("qwen-7b absent", "qwen-7b" not in set(Cv.model))
+    print("\n[B] v_proj truncate 0.80 (completed grid)")
+    check("27 cells, 9 models", len(Cv) == 27 and Cv.model.nunique() == 9,
+          f"{len(Cv)} cells, {Cv.model.nunique()} models")
+    check("every cell has stable rank ~80%", bool(np.allclose(Cv.stable_rank_retained, 0.80, atol=0.002)))
     check("peak range 0.000 to 1.215",
           close(Cv.peak_retention.min(), 0.0, 6e-4) and close(Cv.peak_retention.max(), 1.215, 6e-4),
           f"{Cv.peak_retention.min():.4f} to {Cv.peak_retention.max():.4f}")
+    v = Cv.set_index(["model", "word"])
+    for word, want, layers in [("bat", 1.014, (26, 26)), ("club", 1.122, (26, 32)), ("pupil", 0.835, (26, 12))]:
+        key = ("qwen-7b", word)
+        ok = key in v.index and close(v.loc[key, "peak_retention"], want, 1e-3) \
+            and (int(v.loc[key, "peak_layer_base"]), int(v.loc[key, "peak_layer_after"])) == layers
+        got_v = f"{float(v.loc[key, 'peak_retention']):.4f}" if key in v.index else "missing"
+        check(f"qwen-7b {word} peak retention {want:.3f}, layer {layers[0]}->{layers[1]}", ok, got_v)
 
     print("\n[C] capability")
     Cap = T["capability"]
