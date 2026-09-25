@@ -1,0 +1,12 @@
+
+# generated from data/raw/semcor_words/_manifest.json by scripts/semcor/
+configs/words/*.yaml
+!configs/words/bank.yaml
+!configs/words/bat.yaml
+!configs/words/crane.yaml
+!configs/words/seal.yaml
+!configs/words/plant.yaml
+!configs/words/pupil.yaml
+!configs/words/club.yaml
+!configs/words/truthfulqa.yaml
+!configs/words/truthfulqa_qonly.yaml

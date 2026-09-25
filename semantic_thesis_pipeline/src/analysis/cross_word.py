@@ -54,6 +54,9 @@ COLUMN = {
 # absorbs most of the variance in both variables.
 CONTROLS = ((1, "", "linear"), (2, "_quad", "quadratic"))
 
+# set from the command line; keeps tagged runs in their own files
+TAG = ""
+
 GROUPS = {"decoders": DECODERS, "llama": FAMILIES["llama"],
           "qwen": FAMILIES["qwen"], "encoders": FAMILIES["bert"]}
 
@@ -226,7 +229,7 @@ def run(measure, proj, words, alignment):
               f"{dec[f'n_eff{sfx}'].mean():>12.1f}")
 
     out = ensure_dir(get_results_root() / "analysis" / "_cross_word")
-    suffix = "" if alignment == "post" else f"_{alignment}"
+    suffix = ("" if alignment == "post" else f"_{alignment}") + TAG
     base = f"cross_word_{proj}_{measure}{suffix}"
     df.to_csv(out / f"{base}.csv", index=False)
     M.to_csv(out / f"{base}_models.csv", index=False)
@@ -238,10 +241,38 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--measure", default="spectral_norm", choices=list(COLUMN))
     ap.add_argument("--projection", default="q_proj")
-    ap.add_argument("--words", default="", help="comma-separated; default is all found")
+    ap.add_argument("--words", default="", help="comma-separated")
+    ap.add_argument("--words-file", default="",
+                    help="JSON manifest or text file, one word per line")
+    ap.add_argument("--tag", default="",
+                    help="suffix for the output files, e.g. semcor")
     ap.add_argument("--alignment", default="post", choices=list(ALIGNMENTS))
     a = ap.parse_args()
-    words = [w.strip() for w in a.words.split(",") if w.strip()] or available_words()
+
+    if a.words_file:
+        import json
+        if a.words_file.endswith(".json"):
+            d = json.load(open(a.words_file))
+            words = [w["word"] for w in d["words"]] if isinstance(d, dict) else list(d)
+        else:
+            words = [l.strip() for l in open(a.words_file) if l.strip()]
+    elif a.words:
+        words = [w.strip() for w in a.words.split(",") if w.strip()]
+    else:
+        raise SystemExit(
+            "Give --words or --words-file. The default over every folder in "
+            "results/words/ would mix the controlled words with the SemCor ones."
+        )
+
+    have = set(available_words())
+    missing = [w for w in words if w not in have]
+    words = [w for w in words if w in have]
+    if missing:
+        print(f"{len(missing)} words have no results and are skipped, "
+              f"e.g. {missing[:5]}")
     if not words:
-        raise SystemExit("No words found under results/words/")
+        raise SystemExit("None of the requested words have results.")
+    print(f"{len(words)} words, alignment={a.alignment}, tag={a.tag or '(none)'}")
+
+    TAG = f"_{a.tag}" if a.tag else ""
     run(a.measure, a.projection, words, a.alignment)
