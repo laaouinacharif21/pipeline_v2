@@ -131,6 +131,9 @@ TASKS = {"wic": load_wic, "gsm8k": load_gsm8k,
 
 # ── separation term ───────────────────────────────────────────────────────────
 
+from src.finetune.separation_pool_semcor import SeparationBatchSemCor
+
+
 class SeparationBatch:
     """Sentences and target-token indices for the regularisation term.
 
@@ -269,7 +272,12 @@ def run(a):
     train_rows, test_rows = TASKS[a.task](rng)
     print(f"  {a.task}: {len(train_rows)} train, {len(test_rows)} test")
 
-    sep_data = SeparationBatch(tokenizer, WORDS, a.sep_per_word, device)
+    if a.sep_pool == "semcor":
+        sep_data = SeparationBatchSemCor(
+            tokenizer, device, words_per_step=a.sep_words_per_step,
+            per_sense=a.sep_per_sense)
+    else:
+        sep_data = SeparationBatch(tokenizer, WORDS, a.sep_per_word, device)
     print(f"  regulariser pool: {len(sep_data.items)} sentences")
 
     n_layers = model.config.num_hidden_layers
@@ -401,6 +409,12 @@ def main():
     ap.add_argument("--condition", default="baseline",
                     choices=["baseline", "increase", "preserve", "decrease"])
     ap.add_argument("--lambda-sep", type=float, default=0.1)
+    ap.add_argument("--sep-pool", default="legacy",
+                    choices=["legacy", "semcor"],
+                    help="legacy: seven words, labels word:sense; "
+                         "semcor: 1,000 words, within-word pairs only")
+    ap.add_argument("--sep-words-per-step", type=int, default=4)
+    ap.add_argument("--sep-per-sense", type=int, default=4)
     ap.add_argument("--sep-layers", type=int, default=4,
                     help="How many final layers the separation term covers")
     ap.add_argument("--sep-batch", type=int, default=16)
